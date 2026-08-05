@@ -1,0 +1,28 @@
+# OS
+.DS_Store
+Thumbs.db
+
+# Editors
+.idea/
+.vscode/
+*.swp
+
+# Env / secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Logs / temp
+*.log
+tmp/
+temp/
+
+# Language-agnostic build artifacts (uncomment per stack later)
+# __pycache__/
+# *.pyc
+# node_modules/
+# dist/
+# bin/
+# *.class
