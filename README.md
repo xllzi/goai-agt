@@ -10,7 +10,7 @@ teams/               并行执行单元（Team 内联角色：N×worker + Leader
   investigate/       T2 根因定位：N×调查 Agent + 聚合 Agent(Leader)
   fix/               T3 修复验证：修复 Agent(Leader) + N×测试 Agent
 workflow/            全程工作流
-sop/                 Team 间交接的 SOP 中间产物
+sop-schema/          Team 间交接的 SOP 中间产物
   review-report.md     审查报告说明
   fix-plan.md          修复方案说明
   fix-report.md        修复报告说明
