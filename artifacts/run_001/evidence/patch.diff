@@ -1,0 +1,94 @@
+diff --git a/internal/cache/store.go b/internal/cache/store.go
+index 1a2b3c4..5d6e7f8 100644
+--- a/internal/cache/store.go
++++ b/internal/cache/store.go
+@@ -1,13 +1,17 @@
+ package cache
+
+ import (
++	"sync"
+ 	"time"
+ )
+
+ // Store 是内存缓存的中心存储结构。
++// 所有对 items 的读写必须通过 mu 保护。
+ type Store struct {
+-	items       map[string]Item
+-	lastRefresh time.Time
++	mu          sync.RWMutex
++	items       map[string]Item
++	lastRefresh time.Time
+ }
+
+ // Item 表示缓存中的一个条目。
+@@ -25,11 +29,15 @@ func NewStore() *Store {
+ // Get 根据 key 返回缓存条目。若 key 不存在或条目已过期，返回 false。
+ // 此方法是并发安全的。
+ func (s *Store) Get(key string) (Item, bool) {
++	s.mu.RLock()
++	defer s.mu.RUnlock()
++
+ 	item, ok := s.items[key]
+ 	if !ok {
+ 		return Item{}, false
+ 	}
+ 	if time.Now().After(item.ExpiresAt) {
++		// 过期条目不在 Get 中清理，由 Refresh 负责
+ 		return Item{}, false
+ 	}
+ 	return item, true
+@@ -38,6 +46,9 @@ func (s *Store) Get(key string) (Item, bool) {
+ // set 将条目写入缓存。调用方必须持有写锁。
+ // 此方法是内部方法，仅供 Refresh 调用。
+ func (s *Store) set(key string, item Item) {
++	s.mu.Lock()
++	defer s.mu.Unlock()
++
+ 	s.items[key] = item
+ }
+
+@@ -45,5 +56,7 @@ func (s *Store) set(key string, item Item) {
+ // 返回的切片是 items 的快照，调用方可安全遍历。
+ func (s *Store) Keys() []string {
++	s.mu.RLock()
++	defer s.mu.RUnlock()
++
+ 	keys := make([]string, 0, len(s.items))
+ 	for k := range s.items {
+ 		keys = append(keys, k)
+diff --git a/internal/cache/refresh.go b/internal/cache/refresh.go
+index 9a0b1c2..3d4e5f6 100644
+--- a/internal/cache/refresh.go
++++ b/internal/cache/refresh.go
+@@ -4,7 +4,6 @@ import (
+ 	"context"
+ 	"log"
+-	"sync"
+ 	"time"
+ )
+
+@@ -24,14 +23,12 @@ func (s *Store) StartRefresh(ctx context.Context, interval time.Duration, loader
+ // Refresh 从 loader 拉取全量数据并写入缓存。
+ // 此操作持有写锁，期间所有读操作被阻塞——适用于低频全量刷新。
+ func (s *Store) Refresh(loader Loader) error {
+-	var mu sync.Mutex
++	s.mu.Lock()
++	defer s.mu.Unlock()
++
+ 	data, err := loader.LoadAll()
+ 	if err != nil {
+ 		return err
+ 	}
+
+-	mu.Lock()
+-	defer mu.Unlock()
+-
+ 	for key, val := range data {
+ 		s.set(key, val)
+ 	}
+@@ -39,5 +36,3 @@ func (s *Store) Refresh(loader Loader) error {
+ 	s.lastRefresh = time.Now()
+ 	return nil
+ }
+-
+-

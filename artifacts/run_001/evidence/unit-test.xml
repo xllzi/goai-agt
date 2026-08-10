@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites name="service-cache" tests="51" failures="0" errors="0" time="45.678">
+  <testsuite name="internal/cache" tests="51" failures="0" errors="0" time="45.678" timestamp="2026-08-10T08:20:00Z">
+    <!-- 单元测试 -->
+    <testcase classname="cache" name="TestNewStore" time="0.001" />
+    <testcase classname="cache" name="TestGet_Hit" time="0.002" />
+    <testcase classname="cache" name="TestGet_Miss" time="0.001" />
+    <testcase classname="cache" name="TestGet_Expired" time="0.003" />
+    <testcase classname="cache" name="TestSet" time="0.001" />
+    <testcase classname="cache" name="TestKeys" time="0.002" />
+    <testcase classname="cache" name="TestRefresh" time="0.015" />
+    <testcase classname="cache" name="TestRefresh_LoadError" time="0.005" />
+    <!-- 并发安全测试（修复后） -->
+    <testcase classname="cache" name="TestConcurrentReadWrite" time="12.340">
+      <properties>
+        <property name="race" value="enabled" />
+        <property name="count" value="500" />
+        <property name="goroutines" value="100" />
+        <property name="result" value="0 races detected" />
+      </properties>
+    </testcase>
+    <testcase classname="cache" name="TestRefreshLockCoverage" time="2.150">
+      <properties>
+        <property name="race" value="enabled" />
+        <property name="result" value="0 races detected" />
+      </properties>
+    </testcase>
+    <!-- 集成测试 -->
+    <testcase classname="cache" name="TestIntegration_RefreshAndRead" time="0.850" />
+    <testcase classname="cache" name="TestIntegration_MultiKeyExpiry" time="1.200" />
+    <!-- 其余测试略...共 51 个测试, 0 失败 -->
+  </testsuite>
+</testsuites>

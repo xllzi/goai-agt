@@ -1,0 +1,256 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aihero.dev/sop-schema/fix-report.schema.json",
+  "title": "修复报告",
+  "description": "T3 修复 Team 输出的修复验证报告。包含修复实现、隔离评审、并行测试和最终门禁判定。",
+  "type": "object",
+  "required": [
+    "schema_version", "artifact_id", "run_id", "trace_id", "parent_artifact_id",
+    "producer", "status", "started_at", "completed_at", "duration_ms",
+    "input_refs", "evidence_refs", "validation", "next_action", "payload"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": { "type": "string", "const": "1.0.0" },
+    "artifact_id": {
+      "type": "string",
+      "pattern": "^art_fix_report_[a-z0-9_]+$"
+    },
+    "run_id": {
+      "type": "string",
+      "pattern": "^run_[a-z0-9_]+$"
+    },
+    "trace_id": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{32}$"
+    },
+    "parent_artifact_id": { "type": "string" },
+    "producer": {
+      "type": "object",
+      "required": ["team", "agent", "model"],
+      "additionalProperties": false,
+      "properties": {
+        "team": { "type": "string", "enum": ["fix"] },
+        "agent": { "type": "string", "enum": ["fix-leader"] },
+        "model": { "type": "string" }
+      }
+    },
+    "status": { "type": "string", "enum": ["passed", "rejected", "inconclusive", "failed"] },
+    "started_at": { "type": "string", "format": "date-time" },
+    "completed_at": { "type": "string", "format": "date-time" },
+    "duration_ms": { "type": "integer", "minimum": 0 },
+    "input_refs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["ref_id", "type", "uri"],
+        "additionalProperties": false,
+        "properties": {
+          "ref_id": { "type": "string" },
+          "type": { "type": "string", "enum": ["issue", "ticket", "log", "user_feedback", "codebase", "artifact"] },
+          "uri": { "type": "string" },
+          "description": { "type": "string" }
+        }
+      }
+    },
+    "evidence_refs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["evidence_id", "type", "uri", "description"],
+        "additionalProperties": false,
+        "properties": {
+          "evidence_id": { "type": "string" },
+          "type": { "type": "string", "enum": ["log", "diff", "test_report", "coverage", "trace", "screenshot", "other"] },
+          "uri": { "type": "string" },
+          "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+          "description": { "type": "string" }
+        }
+      }
+    },
+    "validation": {
+      "type": "object",
+      "required": ["schema", "valid"],
+      "additionalProperties": false,
+      "properties": {
+        "schema": { "type": "string", "const": "fix-report.schema.json" },
+        "valid": { "type": "boolean" },
+        "errors": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["path", "message"],
+            "additionalProperties": false,
+            "properties": {
+              "path": { "type": "string" },
+              "keyword": { "type": "string" },
+              "message": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+    "next_action": {
+      "type": "object",
+      "required": ["target"],
+      "additionalProperties": false,
+      "properties": {
+        "target": { "type": "string", "enum": ["recap", "review", "fix", "human_review", "done"] },
+        "reason_code": { "type": "string" },
+        "reason": { "type": "string" }
+      }
+    },
+    "payload": {
+      "type": "object",
+      "required": [
+        "selected_candidate_id", "implementation", "impact_analysis",
+        "isolated_review", "verification", "final_decision"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "selected_candidate_id": { "type": "string" },
+        "implementation": {
+          "type": "object",
+          "required": ["commit", "diff_ref", "changed_files"],
+          "additionalProperties": false,
+          "properties": {
+            "commit": { "type": "string" },
+            "diff_ref": { "type": "string" },
+            "changed_files": { "type": "array", "minItems": 1, "items": { "type": "string" } },
+            "change_summary": { "type": "string" },
+            "deviation_from_plan": { "type": "array", "items": { "type": "string" } }
+          }
+        },
+        "impact_analysis": {
+          "type": "object",
+          "required": ["callers", "shared_state", "configuration", "timing_concurrency", "compatibility"],
+          "additionalProperties": false,
+          "properties": {
+            "callers": {
+              "type": "array",
+              "items": { "type": "string" }
+            },
+            "shared_state": {
+              "type": "array",
+              "items": { "type": "string" }
+            },
+            "configuration": {
+              "type": "array",
+              "items": { "type": "string" }
+            },
+            "timing_concurrency": {
+              "type": "array",
+              "items": { "type": "string" }
+            },
+            "compatibility": {
+              "type": "array",
+              "items": { "type": "string" }
+            }
+          }
+        },
+        "isolated_review": {
+          "type": "object",
+          "required": ["reviewer", "visible_inputs", "verdict", "findings"],
+          "additionalProperties": false,
+          "properties": {
+            "reviewer": { "type": "string" },
+            "visible_inputs": {
+              "type": "array",
+              "minItems": 1,
+              "items": { "type": "string" }
+            },
+            "verdict": { "type": "string", "enum": ["passed", "rejected"] },
+            "findings": {
+              "type": "array",
+              "minItems": 1,
+              "items": { "type": "string" }
+            },
+            "regression_risks": {
+              "type": "array",
+              "items": { "type": "string" }
+            }
+          }
+        },
+        "verification": {
+          "type": "object",
+          "required": ["reproduction_test", "test_suites"],
+          "additionalProperties": false,
+          "properties": {
+            "reproduction_test": {
+              "type": "object",
+              "required": ["before_fix", "after_fix"],
+              "additionalProperties": false,
+              "properties": {
+                "before_fix": { "type": "string", "enum": ["passed", "failed", "skipped"] },
+                "after_fix": { "type": "string", "enum": ["passed", "failed", "skipped"] }
+              }
+            },
+            "test_suites": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "object",
+                "required": ["type", "result"],
+                "additionalProperties": false,
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": ["unit", "integration", "boundary", "mutation", "static", "e2e"]
+                  },
+                  "command": { "type": "string" },
+                  "result": { "type": "string", "enum": ["passed", "failed", "partial"] },
+                  "report_ref": { "type": "string" },
+                  "total": { "type": "integer", "minimum": 0 },
+                  "passed_count": { "type": "integer", "minimum": 0 },
+                  "failed_count": { "type": "integer", "minimum": 0 },
+                  "skipped_count": { "type": "integer", "minimum": 0 }
+                }
+              }
+            },
+            "coverage_change": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "before_pct": { "type": "number", "minimum": 0, "maximum": 100 },
+                "after_pct": { "type": "number", "minimum": 0, "maximum": 100 },
+                "delta_pct": { "type": "number" }
+              }
+            },
+            "failed_tests": {
+              "type": "array",
+              "items": { "type": "string" }
+            },
+            "skipped_tests": {
+              "type": "array",
+              "items": { "type": "string" }
+            }
+          }
+        },
+        "final_decision": {
+          "type": "object",
+          "required": ["result", "release_recommendation", "rollback_required"],
+          "additionalProperties": false,
+          "properties": {
+            "result": {
+              "type": "string",
+              "enum": ["fixed", "partially_fixed", "ineffective", "regressed"]
+            },
+            "release_recommendation": {
+              "type": "string",
+              "enum": ["approve", "block", "manual_review"]
+            },
+            "rollback_required": { "type": "boolean" },
+            "next_action": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "target": { "type": "string" },
+                "reason": { "type": "string" }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

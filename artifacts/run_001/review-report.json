@@ -1,0 +1,119 @@
+{
+  "schema_version": "1.0.0",
+  "artifact_id": "art_review_report_a1b2c3d4",
+  "run_id": "run_20260810_001",
+  "trace_id": "4bf92f3577b34da6a3ce929d0e0e4736",
+  "parent_artifact_id": null,
+  "producer": {
+    "team": "review",
+    "agent": "review-leader",
+    "model": "gpt-4o"
+  },
+  "status": "passed",
+  "started_at": "2026-08-10T08:00:00Z",
+  "completed_at": "2026-08-10T08:03:45Z",
+  "duration_ms": 225000,
+  "input_refs": [
+    {
+      "ref_id": "IN_001",
+      "type": "issue",
+      "uri": "https://issues.example.com/PROJ-4201",
+      "description": "核心 Issue：用户反馈 API 偶发返回过期缓存数据"
+    },
+    {
+      "ref_id": "IN_002",
+      "type": "user_feedback",
+      "uri": "https://feedback.example.com/tickets/FB-8892",
+      "description": "用户工单：订单列表展示的价格与详情页不一致，刷新后恢复正常"
+    },
+    {
+      "ref_id": "IN_003",
+      "type": "log",
+      "uri": "s3://logs/prod/api-gateway/2026-08-09/error.log",
+      "description": "生产环境 API 网关错误日志，含 data race 堆栈"
+    },
+    {
+      "ref_id": "IN_004",
+      "type": "codebase",
+      "uri": "git://github.com/example/service-cache@main",
+      "description": "缓存服务代码仓库 main 分支"
+    }
+  ],
+  "evidence_refs": [
+    {
+      "evidence_id": "EV_REV_001",
+      "type": "log",
+      "uri": "evidence/reproduction.log",
+      "description": "复现数据竞争时捕获的 goroutine 竞态日志",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  ],
+  "validation": {
+    "schema": "review-report.schema.json",
+    "valid": true,
+    "errors": []
+  },
+  "next_action": {
+    "target": "investigate",
+    "reason_code": "REVIEW_PASSED",
+    "reason": "缺陷去重完成，信息足够进入根因调查阶段"
+  },
+  "payload": {
+    "canonical_defects": [
+      {
+        "canonical_defect_id": "DEF_CANON_001",
+        "title": "缓存并发写入导致数据竞争，偶发返回过期/不一致数据",
+        "description": "API 服务在并发请求下对共享缓存 map 的写入未持有互斥锁，导致数据竞争。表现为用户刷新页面偶见价格不一致、订单列表与详情页数据矛盾，重启或缓存过期后自动恢复。",
+        "severity": "high",
+        "priority": "p0",
+        "affected_versions": ["v2.8.0", "v2.8.1"],
+        "affected_components": ["service-cache", "api-gateway"],
+        "source_refs": [
+          { "source": "issue", "source_id": "PROJ-4201", "url": "https://issues.example.com/PROJ-4201" },
+          { "source": "user_feedback", "source_id": "FB-8892", "url": "https://feedback.example.com/tickets/FB-8892" },
+          { "source": "log", "source_id": "prod-20260809-error.log" }
+        ],
+        "dedup_decisions": [
+          {
+            "compared_defect": { "source": "user_feedback", "source_id": "FB-8892" },
+            "verdict": "same",
+            "evidence": [
+              "两份缺陷的报错堆栈指纹一致：fatal error: concurrent map writes at internal/cache/store.go:87",
+              "触发路径均为高并发读取 + 后台刷新写入",
+              "版本区间完全重叠（v2.8.0-v2.8.1）"
+            ],
+            "dedup_key": "DEF_CANON_001"
+          }
+        ],
+        "reproduction_clues": [
+          "使用 go test -race -count=100 ./internal/cache/... 可稳定触发竞态检测",
+          "并发场景：100 个 goroutine 同时 Read + 1 个 goroutine 后台 Refresh"
+        ],
+        "observed_symptoms": [
+          "API 偶发返回过期数据（TTL 内）",
+          "同一请求两次调用返回不同结果",
+          "goroutine 竞态检测器报 concurrent map writes"
+        ],
+        "stack_fingerprint": "fatal error: concurrent map writes\ngoroutine 42 [running]:\ninternal/cache.(*Store).set(...)\n    /app/internal/cache/store.go:87",
+        "missing_information": [],
+        "investigation_scope": [
+          "internal/cache/store.go — 并发写入路径的锁机制",
+          "internal/cache/refresh.go — 后台刷新 goroutine 的同步策略",
+          "go.mod — 是否已使用 sync.Map 或并发安全库"
+        ]
+      }
+    ],
+    "merged_defects": [
+      {
+        "canonical_id": "DEF_CANON_001",
+        "merged_source_ids": ["PROJ-4201", "FB-8892", "prod-20260809-error.log"]
+      }
+    ],
+    "rejected_defects": [],
+    "information_gaps": [],
+    "t2_readiness": {
+      "ready": true,
+      "blockers": []
+    }
+  }
+}

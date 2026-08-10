@@ -1,0 +1,185 @@
+{
+  "schema_version": "1.0.0",
+  "artifact_id": "art_fix_report_i9j0k1l2",
+  "run_id": "run_20260810_001",
+  "trace_id": "4bf92f3577b34da6a3ce929d0e0e4736",
+  "parent_artifact_id": "art_fix_plan_e5f6g7h8",
+  "producer": {
+    "team": "fix",
+    "agent": "fix-leader",
+    "model": "gpt-4o"
+  },
+  "status": "passed",
+  "started_at": "2026-08-10T08:15:00Z",
+  "completed_at": "2026-08-10T08:22:10Z",
+  "duration_ms": 430000,
+  "input_refs": [
+    {
+      "ref_id": "IN_020",
+      "type": "artifact",
+      "uri": "artifacts/run_001/fix-plan.json",
+      "description": "上游 T2 修复方案"
+    },
+    {
+      "ref_id": "IN_021",
+      "type": "codebase",
+      "uri": "git://github.com/example/service-cache@fix/concurrent-map-write",
+      "description": "修复分支"
+    }
+  ],
+  "evidence_refs": [
+    {
+      "evidence_id": "EV_FIX_001",
+      "type": "diff",
+      "uri": "evidence/patch.diff",
+      "description": "修复提交的 patch 文件",
+      "sha256": "d3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "evidence_id": "EV_FIX_002",
+      "type": "test_report",
+      "uri": "evidence/unit-test.xml",
+      "description": "JUnit 格式的单元测试报告",
+      "sha256": "a2b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b854"
+    },
+    {
+      "evidence_id": "EV_FIX_003",
+      "type": "coverage",
+      "uri": "evidence/coverage.json",
+      "description": "代码覆盖率报告",
+      "sha256": "b1b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b853"
+    },
+    {
+      "evidence_id": "EV_FIX_004",
+      "type": "log",
+      "uri": "evidence/reproduction.log",
+      "description": "修复后 race test 输出（零竞态警告）",
+      "sha256": "c4b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b856"
+    }
+  ],
+  "validation": {
+    "schema": "fix-report.schema.json",
+    "valid": true,
+    "errors": []
+  },
+  "next_action": {
+    "target": "recap",
+    "reason_code": "FIX_VERIFIED",
+    "reason": "修复通过全部门禁，移交复盘 Agent 沉淀知识"
+  },
+  "payload": {
+    "selected_candidate_id": "FIX_001",
+    "implementation": {
+      "commit": "a3f2b1c9d8e7f6a5b4c3d2e1f0",
+      "diff_ref": "evidence/patch.diff",
+      "changed_files": ["internal/cache/store.go"],
+      "change_summary": "Store 结构体新增 sync.RWMutex；set() 加写锁；Get() 加读锁；Refresh() 简化锁逻辑，移除局部 sync.Mutex，统一使用 Store.mu",
+      "deviation_from_plan": []
+    },
+    "impact_analysis": {
+      "callers": [
+        "api/handler.go: GetProduct() → Store.Get() — 读路径，RLock，无影响",
+        "api/handler.go: ListProducts() → Store.Get() — 读路径，RLock，无影响",
+        "internal/cache/refresh.go: Refresh() → Store.set() — 写路径，Lock，已修正锁区间"
+      ],
+      "shared_state": [
+        "Store.items (map[string]Item) — 现由 RWMutex 保护",
+        "Store.lastRefresh (time.Time) — 在 Refresh() 的写锁区间内更新"
+      ],
+      "configuration": [
+        "无需配置变更"
+      ],
+      "timing_concurrency": [
+        "Get() 使用 RLock 允许并行读取，读并发度无退化",
+        "set() 使用 Lock 串行写入，写入频率低（后台刷新），不影响吞吐",
+        "已审计 Store 方法间互调：Get/Set/Refresh 无相互调用，无死锁风险"
+      ],
+      "compatibility": [
+        "Store 公开方法签名不变，调用方无需改动",
+        "锁为内部实现细节，API 契约不受影响"
+      ]
+    },
+    "isolated_review": {
+      "reviewer": "test-worker-3（独立评审角色）",
+      "visible_inputs": [
+        "缺陷描述：DEF_CANON_001",
+        "修复目标：消除 Store 并发写的 data race",
+        "diff 内容：evidence/patch.diff"
+      ],
+      "verdict": "passed",
+      "findings": [
+        "set() 的 Lock/Unlock 配对正确，无遗漏",
+        "Get() 的 RLock/RUnlock 配对正确",
+        "Refresh() 中原有的局部 sync.Mutex 已移除，lock 区间统一由 Store.mu 管理",
+        "无新增公开方法，无 API 破坏性变更"
+      ],
+      "regression_risks": [
+        "极低：锁为纯增量保护，未改变任何业务逻辑"
+      ]
+    },
+    "verification": {
+      "reproduction_test": {
+        "before_fix": "failed",
+        "after_fix": "passed"
+      },
+      "test_suites": [
+        {
+          "type": "unit",
+          "command": "go test -race -count=500 ./internal/cache/...",
+          "result": "passed",
+          "report_ref": "evidence/unit-test.xml",
+          "total": 42,
+          "passed_count": 42,
+          "failed_count": 0,
+          "skipped_count": 0
+        },
+        {
+          "type": "integration",
+          "command": "go test -race ./internal/cache/... -tags=integration",
+          "result": "passed",
+          "report_ref": "evidence/unit-test.xml",
+          "total": 8,
+          "passed_count": 8,
+          "failed_count": 0,
+          "skipped_count": 0
+        },
+        {
+          "type": "static",
+          "command": "go vet ./internal/cache/...",
+          "result": "passed",
+          "report_ref": "",
+          "total": 0,
+          "passed_count": 0,
+          "failed_count": 0,
+          "skipped_count": 0
+        },
+        {
+          "type": "boundary",
+          "command": "go test -race -count=100 -run=TestConcurrentReadWrite ./internal/cache/...",
+          "result": "passed",
+          "report_ref": "evidence/unit-test.xml",
+          "total": 1,
+          "passed_count": 1,
+          "failed_count": 0,
+          "skipped_count": 0
+        }
+      ],
+      "coverage_change": {
+        "before_pct": 78.3,
+        "after_pct": 78.3,
+        "delta_pct": 0.0
+      },
+      "failed_tests": [],
+      "skipped_tests": []
+    },
+    "final_decision": {
+      "result": "fixed",
+      "release_recommendation": "approve",
+      "rollback_required": false,
+      "next_action": {
+        "target": "recap",
+        "reason": "所有门禁通过：race test ×500 零警告、单元/集成测试全通过、隔离评审通过、影响面分析无风险"
+      }
+    }
+  }
+}

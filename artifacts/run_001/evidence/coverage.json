@@ -1,0 +1,37 @@
+{
+  "module": "internal/cache",
+  "timestamp": "2026-08-10T08:20:00Z",
+  "mode": "atomic",
+  "summary": {
+    "total_statements": 312,
+    "covered_statements": 244,
+    "coverage_pct": 78.3
+  },
+  "files": [
+    {
+      "path": "internal/cache/store.go",
+      "total_statements": 87,
+      "covered_statements": 87,
+      "coverage_pct": 100.0
+    },
+    {
+      "path": "internal/cache/refresh.go",
+      "total_statements": 45,
+      "covered_statements": 32,
+      "coverage_pct": 71.1
+    },
+    {
+      "path": "internal/cache/eviction.go",
+      "total_statements": 98,
+      "covered_statements": 72,
+      "coverage_pct": 73.5
+    },
+    {
+      "path": "internal/cache/metrics.go",
+      "total_statements": 82,
+      "covered_statements": 53,
+      "coverage_pct": 64.6
+    }
+  ],
+  "note": "修复未改变覆盖率（仅添加锁语句，不影响分支覆盖）。eviction.go 和 metrics.go 的未覆盖路径为低优先级后台逻辑，已在 backlog 中跟踪。"
+}
