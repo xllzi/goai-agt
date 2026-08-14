@@ -1,0 +1,126 @@
+{
+  "schema_version": "1.0.0",
+  "artifact_id": "art_recap_m3n4o5p6",
+  "run_id": "run_20260810_001",
+  "trace_id": "4bf92f3577b34da6a3ce929d0e0e4736",
+  "parent_artifact_id": "art_fix_report_i9j0k1l2",
+  "producer": {
+    "team": "standalone",
+    "agent": "recapper",
+    "model": "gpt-4o"
+  },
+  "status": "passed",
+  "started_at": "2026-08-10T08:23:00Z",
+  "completed_at": "2026-08-10T08:25:00Z",
+  "duration_ms": 120000,
+  "input_refs": [
+    {
+      "ref_id": "IN_030",
+      "type": "artifact",
+      "uri": "artifacts/run_001/review-report.json",
+      "description": "T1 审查报告"
+    },
+    {
+      "ref_id": "IN_031",
+      "type": "artifact",
+      "uri": "artifacts/run_001/fix-plan.json",
+      "description": "T2 修复方案"
+    },
+    {
+      "ref_id": "IN_032",
+      "type": "artifact",
+      "uri": "artifacts/run_001/fix-report.json",
+      "description": "T3 修复报告"
+    }
+  ],
+  "evidence_refs": [],
+  "validation": {
+    "schema": "recap.schema.json",
+    "valid": true,
+    "errors": []
+  },
+  "next_action": {
+    "target": "done",
+    "reason_code": "RECAP_COMPLETE",
+    "reason": "知识沉淀完成，闭环结束"
+  },
+  "payload": {
+    "defect_id": "DEF_CANON_001",
+    "defect_summary": "service-cache 组件中 Store.set() 方法对共享 map 的并发写入未受互斥锁保护，在 v2.8.0 引入并发读路径后暴露 data race，导致 API 偶发返回过期/不一致数据。根因为设计假设变更（set() 从单 goroutine 调用变为并发调用）未及时加固。",
+    "root_cause_pattern": "单线程设计假设失效：原设计假定 set() 仅在单个 Refresh goroutine 中调用，当系统演进为并发读写时，该假定被打破但未被显式审查或测试捕获。",
+    "trigger_conditions": [
+      "后台 Refresh 与前台 Read 并发执行",
+      "map 写入未受互斥锁保护",
+      "Refresh() 的锁区间未完全覆盖所有写操作"
+    ],
+    "resolution_summary": "为 Store 增加 sync.RWMutex，所有读写路径统一由该锁保护，race test ×500 零警告，单元/集成测试全通过，无性能退化。修复改动极小（仅 store.go 一个文件），影响面充分受控。",
+    "effective_evidence": [
+      {
+        "evidence_id": "EV_H1_S1",
+        "why_effective": "代码审查直接定位无锁写入点，是最小化、最精确的证据类型"
+      },
+      {
+        "evidence_id": "EV_FIX_004",
+        "why_effective": "修复后 race test ×500 提供了统计显著性保证，远高于单次测试"
+      }
+    ],
+    "misleading_signals": [
+      {
+        "signal": "git blame 指向 v2.5.0 即无锁——看起来是陈年代码",
+        "why_misleading": "代码本身未变，但调用上下文变了（新增并发读路径），单纯 blame 会误导为'一直没问题所以不用改'"
+      }
+    ],
+    "failed_hypotheses": [
+      {
+        "hypothesis": "H3：数据结构的循环引用导致竞态",
+        "why_failed": "race detector 精确指向 map 写入而非字段访问；sync.Map 替换后竞态消失，排除数据结构因素"
+      }
+    ],
+    "failed_fix_attempts": [],
+    "regression_lesson": "本次缺陷的逃逸路径是：单 goroutine 安全 → 多 goroutine 不安全，但缺乏并发安全门禁。任何涉及共享状态的代码变更必须伴随 race detector 回归测试，尤其是调用方并发模型变化时。",
+    "new_regression_tests": [
+      {
+        "test_name": "TestConcurrentReadWrite",
+        "type": "unit",
+        "covers": "并发读（Get）+ 并发写（Refresh 中的 set）的 data race 检测",
+        "location": "internal/cache/store_test.go"
+      },
+      {
+        "test_name": "TestRefreshLockCoverage",
+        "type": "unit",
+        "covers": "Refresh 的锁区间覆盖所有写操作，确保无锁外写入",
+        "location": "internal/cache/store_test.go"
+      }
+    ],
+    "reusable_rules": [
+      {
+        "target": "T1",
+        "rule": "当缺陷堆栈指纹包含 \"concurrent map writes\" 时，自动标记为并发安全类缺陷，调查范围应包括调用方并发模型变更历史",
+        "rationale": "本缺陷从上报到去重仅用了堆栈指纹，但未在审查阶段识别出并发模型的演进风险——此规则让 T1 在审查阶段即标记并发安全关注点",
+        "source_refs": ["DEF_CANON_001"]
+      },
+      {
+        "target": "T2",
+        "rule": "git blame 显示'陈年代码无锁'时，必须额外检查调用方并发模型的变更历史（如新增 goroutine、并发读路径），防止'一直没问题'的认知偏差",
+        "rationale": "H1 调查中 blame 误导了时间线判断——代码未变但调用上下文变了。此规则强制调查视角从'代码何时引入'转向'何时变得不安全'",
+        "source_refs": ["H1", "misleading_signals"]
+      },
+      {
+        "target": "T3",
+        "rule": "涉及共享状态变更的修复，验收标准必须包含 race detector × N（N ≥ 100）的统计显著性测试，不满足不得通过",
+        "rationale": "单次 race test 的假阴性率高；本缺陷在 ×100 测试中约 12% 触发，×500 可提供足够置信度",
+        "source_refs": ["verification.reproduction_test"]
+      }
+    ],
+    "knowledge_tags": [
+      "concurrency", "data-race", "cache", "sync.RWMutex", "race-detector",
+      "design-assumption", "regression-testing"
+    ],
+    "related_defects": [],
+    "follow_up_actions": [
+      "全仓库扫描：对所有使用 map 且存在并发 goroutine 的模块执行 race test 审计",
+      "CI 门禁增强：在 pre-commit hook 中强制 race detector（至少 -count=10）",
+      "文档更新：在 service-cache 的 CONTEXT.md 中记录并发安全约束"
+    ]
+  }
+}
