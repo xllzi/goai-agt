@@ -1,0 +1,210 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aihero.dev/eval/schema/eval-result.schema.json",
+  "title": "评估结果",
+  "description": "eval 模块对一次（或一批）闭环执行的评估结果。汇总 metrics.md 中定义的各层指标，作为「运行验证」章节的机器可消费真源。",
+  "type": "object",
+  "required": [
+    "schema_version", "eval_id", "run_id", "producer", "status",
+    "started_at", "completed_at", "input_refs", "validation", "payload"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "1.0.0"
+    },
+    "eval_id": {
+      "type": "string",
+      "description": "本次评估唯一 ID，建议格式 eva_{run_id}",
+      "pattern": "^eva_[a-z0-9_]+$"
+    },
+    "run_id": {
+      "type": "string",
+      "description": "被评估的闭环执行 ID；若为批量评估，指向批次 ID",
+      "pattern": "^run_[a-z0-9_]+$"
+    },
+    "producer": {
+      "type": "object",
+      "required": ["module", "agent", "model"],
+      "additionalProperties": false,
+      "properties": {
+        "module": { "type": "string", "const": "eval" },
+        "agent": { "type": "string", "const": "eval-agent" },
+        "model": { "type": "string" }
+      }
+    },
+    "status": {
+      "type": "string",
+      "enum": ["passed", "inconclusive", "failed"],
+      "description": "评估本身是否完成。passed=指标可算且结果可信；inconclusive=数据不足无法下结论；failed=评估流程出错"
+    },
+    "started_at": { "type": "string", "format": "date-time" },
+    "completed_at": { "type": "string", "format": "date-time" },
+    "input_refs": {
+      "type": "array",
+      "description": "本次评估消费的产物引用（review-report / fix-plan / fix-report / recap 及数据集 ground truth）",
+      "items": {
+        "type": "object",
+        "required": ["ref_id", "type", "uri"],
+        "additionalProperties": false,
+        "properties": {
+          "ref_id": { "type": "string" },
+          "type": { "type": "string", "enum": ["review_report", "fix_plan", "fix_report", "recap", "dataset", "test_result", "other"] },
+          "uri": { "type": "string" },
+          "description": { "type": "string" }
+        }
+      }
+    },
+    "validation": {
+      "type": "object",
+      "required": ["schema", "valid"],
+      "additionalProperties": false,
+      "properties": {
+        "schema": { "type": "string", "const": "eval-result.schema.json" },
+        "valid": { "type": "boolean" },
+        "errors": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["path", "message"],
+            "additionalProperties": false,
+            "properties": {
+              "path": { "type": "string" },
+              "keyword": { "type": "string" },
+              "message": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+    "payload": {
+      "type": "object",
+      "required": ["end_to_end", "per_stage", "efficiency", "closed_loop", "verdict"],
+      "additionalProperties": false,
+      "properties": {
+        "end_to_end": {
+          "type": "object",
+          "description": "L1 端到端指标",
+          "required": ["resolve_rate", "test_verified_resolve_rate", "regression_rate", "redo_rate"],
+          "additionalProperties": false,
+          "properties": {
+            "resolve_rate": { "type": "number", "minimum": 0, "maximum": 1 },
+            "test_verified_resolve_rate": { "type": "number", "minimum": 0, "maximum": 1 },
+            "regression_rate": { "type": "number", "minimum": 0, "maximum": 1 },
+            "redo_rate": { "type": "number", "minimum": 0, "maximum": 1 },
+            "total_runs": { "type": "integer", "minimum": 0 },
+            "resolved_runs": { "type": "integer", "minimum": 0 },
+            "notes": { "type": "array", "items": { "type": "string" } }
+          }
+        },
+        "per_stage": {
+          "type": "object",
+          "description": "L2 分阶段指标",
+          "required": ["dedup_accuracy", "root_cause_hit_rate", "hypothesis_rejection_effectiveness", "gate_pass_rate"],
+          "additionalProperties": false,
+          "properties": {
+            "dedup_accuracy": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "accuracy": { "type": "number", "minimum": 0, "maximum": 1 },
+                "false_merge_rate": { "type": "number", "minimum": 0, "maximum": 1 },
+                "false_split_rate": { "type": "number", "minimum": 0, "maximum": 1 },
+                "is_soft": { "type": "boolean", "const": true }
+              }
+            },
+            "root_cause_hit_rate": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "rate": { "type": "number", "minimum": 0, "maximum": 1 },
+                "is_soft": { "type": "boolean", "const": true }
+              }
+            },
+            "hypothesis_rejection_effectiveness": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "rate": { "type": "number", "minimum": 0, "maximum": 1 },
+                "is_soft": { "type": "boolean", "const": true }
+              }
+            },
+            "gate_pass_rate": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "rate": { "type": "number", "minimum": 0, "maximum": 1 },
+                "is_soft": { "type": "boolean", "const": false }
+              }
+            }
+          }
+        },
+        "efficiency": {
+          "type": "object",
+          "description": "L3 效率成本指标",
+          "required": ["end_to_end_wall_clock_ms", "avg_redo_count"],
+          "additionalProperties": false,
+          "properties": {
+            "end_to_end_wall_clock_ms": { "type": "integer", "minimum": 0 },
+            "speedup": {
+              "type": "number",
+              "minimum": 1,
+              "description": "并行加速比；若 Worker 级耗时未埋点则缺省"
+            },
+            "cost_per_resolved": {
+              "type": "number",
+              "minimum": 0,
+              "description": "单位修复成本（token 或美元，单位在 notes 标注）；依赖埋点"
+            },
+            "avg_redo_count": { "type": "number", "minimum": 0 },
+            "notes": { "type": "array", "items": { "type": "string" } }
+          }
+        },
+        "closed_loop": {
+          "type": "object",
+          "description": "L4 闭环增值指标",
+          "required": ["rule_reuse_rate", "second_fix_time_reduction_rate", "escaped_defect_conversion_rate"],
+          "additionalProperties": false,
+          "properties": {
+            "rule_reuse_rate": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1,
+              "description": "回灌规则命中率（软指标）"
+            },
+            "second_fix_time_reduction_rate": {
+              "type": "number",
+              "description": "同类缺陷二次修复耗时下降率；可为负"
+            },
+            "escaped_defect_conversion_rate": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1,
+              "description": "逃逸缺陷 → 新回归测试转化率"
+            }
+          }
+        },
+        "verdict": {
+          "type": "object",
+          "description": "本次评估的汇总结论",
+          "required": ["conclusion", "key_findings"],
+          "additionalProperties": false,
+          "properties": {
+            "conclusion": { "type": "string", "enum": ["effective", "inconclusive", "ineffective"] },
+            "key_findings": {
+              "type": "array",
+              "minItems": 1,
+              "items": { "type": "string" }
+            },
+            "limitations": {
+              "type": "array",
+              "items": { "type": "string" },
+              "description": "样本量、软指标主观性、埋点缺失等局限"
+            }
+          }
+        }
+      }
+    }
+  }
+}
